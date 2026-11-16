@@ -1,0 +1,9 @@
+{
+  "items": {
+    "우산": {"category": "일반", "stock": 2},
+    "보조배터리": {"category": "전자기기", "stock": 1},
+    "돗자리": {"category": "일반", "stock": 0},
+    "공학용계산기": {"category": "장기", "stock": 1}
+  },
+  "loans": []
+}
