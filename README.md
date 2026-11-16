@@ -9,7 +9,7 @@
 | `v2_refactored/` | 구조 개선 후 | 입력·처리·저장을 파일별로 나누고, 대여 규칙에 Strategy 패턴 적용 (동작은 v1과 같음) |
 | `v3_changed/` | 기능 변경 후 | v2에 "장기 대여" 규칙 하나 추가 + 웹 화면(선택 확장) |
 
-GitHub 저장소: https://github.com/smiinny/rental-project
+GitHub 저장소: https://github.com/smiinny/rental-projec
 
 ## 1. 필요한 것
 
