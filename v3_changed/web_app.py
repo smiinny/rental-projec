@@ -13,9 +13,18 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs
 
 import main
+import rules
 import storage
 
 DATA_PATH = "data/items_v3.json"
+
+
+def rule_text(category):
+    """분류의 안내 문구. 규칙이 없는 분류면 그 사실을 알려 준다."""
+    try:
+        return rules.get_rule(category).describe()
+    except ValueError:
+        return "(등록되지 않은 분류)"
 
 
 def make_page(message):
@@ -27,11 +36,16 @@ def make_page(message):
 
     today = str(date.today())
     item_rows = ""
-    options = ""
+    item_options = ""
     for name, item in data["items"].items():
         item_rows += ("<tr><td>" + html.escape(name) + "</td><td>" + html.escape(item["category"])
-                      + "</td><td>" + str(item["stock"]) + "</td></tr>")
-        options += "<option>" + html.escape(name) + "</option>"
+                      + "</td><td>" + str(item["stock"]) + "</td><td>"
+                      + html.escape(rule_text(item["category"])) + "</td></tr>")
+        item_options += "<option>" + html.escape(name) + "</option>"
+
+    category_options = ""
+    for category in rules.RULES:
+        category_options += "<option>" + html.escape(category) + "</option>"
 
     loan_rows = ""
     for loan in data["loans"]:
@@ -46,28 +60,39 @@ def make_page(message):
     if loan_rows == "":
         loan_rows = "<tr><td colspan='5'>대여 중인 물품이 없습니다.</td></tr>"
 
+    # 결과 문장이 두 줄(대여 완료 + 안내)일 수 있으므로 줄바꿈을 <br>로 바꾼다.
+    message_html = html.escape(message).replace("\n", "<br>")
+
     return """<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><title>공유 물품 대여</title>
 <style>
- body { font-family: sans-serif; max-width: 720px; margin: 30px auto; }
+ body { font-family: sans-serif; max-width: 760px; margin: 30px auto; }
  table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
  th, td { border: 1px solid #999; padding: 6px 10px; text-align: left; }
  th { background: #eee; }
  .message { padding: 10px; background: #f3f3f3; border-left: 4px solid #555; }
 </style></head><body>
 <h1>공유 물품 대여</h1>
-<p class="message">""" + html.escape(message) + """</p>
+<p class="message">""" + message_html + """</p>
 <h2>대여 신청</h2>
 <form method="post" action="/rent">
- 품목 <select name="item">""" + options + """</select>
+ 품목 <select name="item">""" + item_options + """</select>
  이름 <input name="borrower" size="8">
  대여일 <input type="date" name="date" value='""" + today + """'>
  <button>대여</button>
 </form>
-<h2>물품 재고</h2>
-<table><tr><th>품목</th><th>분류</th><th>재고</th></tr>""" + item_rows + """</table>
+<h2>물품 재고와 대여 규칙</h2>
+<table><tr><th>품목</th><th>분류</th><th>재고</th><th>반납 기한 · 연체료 안내</th></tr>""" + item_rows + """</table>
 <h2>대여 중</h2>
 <table><tr><th>번호</th><th>품목</th><th>빌린 사람</th><th>반납 기한</th><th>반납</th></tr>""" + loan_rows + """</table>
+<h2>물품 추가</h2>
+<form method="post" action="/add">
+ 품목 <input name="item" size="10">
+ 분류 <select name="category">""" + category_options + """</select>
+ 수량 <input type="number" name="count" value="1" min="1" style="width:60px">
+ <button>추가</button>
+</form>
+<p>이미 있는 품목을 같은 분류로 추가하면 재고가 늘어납니다.</p>
 </body></html>"""
 
 
@@ -88,13 +113,15 @@ class RentalHandler(BaseHTTPRequestHandler):
         form = parse_qs(self.rfile.read(length).decode("utf-8"))
 
         def value(key):
-            # 이름 안의 공백은 명령을 나누는 기준과 겹치므로 없앤다.
+            # 값 안의 공백은 명령을 나누는 기준과 겹치므로 없앤다.
             return "".join(form.get(key, [""])[0].split())
 
         if self.path == "/rent":
             line = "rent " + value("item") + " " + value("borrower") + " " + value("date")
         elif self.path == "/return":
             line = "return " + value("loan_id") + " " + value("date")
+        elif self.path == "/add":
+            line = "add " + value("item") + " " + value("category") + " " + value("count")
         else:
             line = ""
         # 화면에서 받은 값을 터미널과 같은 명령 한 줄로 바꿔 같은 함수에 넘긴다.

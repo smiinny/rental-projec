@@ -18,8 +18,10 @@ def handle_command(line, data_path):
         name, values = inputs.parse_command(line)       # 입력 검사
         if name == "list":
             return service.list_text(data)
-        if name == "rent":
-            message = service.rent(data, *values)       # 처리
+        if name == "add":
+            message = service.add_item(data, *values)   # 처리
+        elif name == "rent":
+            message = service.rent(data, *values)
         else:
             message = service.return_item(data, *values)
         storage.save_data(data_path, data)              # 성공했을 때만 저장
@@ -32,7 +34,7 @@ def main():
     if len(sys.argv) != 2:
         print("사용법: python main.py <자료파일.json>")
         return
-    print("명령: rent <품목> <이름> <날짜> | return <번호> <날짜> | list | quit")
+    print("명령: rent <품목> <이름> <날짜> | return <번호> <날짜> | add <품목> <분류> <수량> | list | quit")
     for line in sys.stdin:
         line = line.strip()
         if line == "quit":

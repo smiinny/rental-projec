@@ -1,7 +1,7 @@
-"""처리 담당: 대여·반납·목록. 화면 출력이나 파일 저장은 하지 않는다.
+"""처리 담당: 물품 추가·대여·반납·목록. 화면 출력이나 파일 저장은 하지 않는다.
 
 data 딕셔너리를 받아 값을 바꾸고, 결과 문장을 돌려준다.
-대여 기간과 연체료는 직접 계산하지 않고 rules.get_rule()이 준 규칙 객체에 맡긴다.
+대여 기간·연체료·안내 문구는 직접 정하지 않고 rules.get_rule()이 준 규칙 객체에 맡긴다.
 """
 from inputs import parse_date
 from rules import get_rule
@@ -10,13 +10,28 @@ from rules import get_rule
 def list_text(data):
     lines = ["[물품]"]
     for name, item in data["items"].items():
-        lines.append(name + " (" + item["category"] + ") 재고 " + str(item["stock"]))
+        rule = get_rule(item["category"])          # 규칙 선택 (Strategy)
+        lines.append(name + " (" + item["category"] + ") 재고 " + str(item["stock"])
+                     + " | " + rule.describe())
     lines.append("[대여 중]")
     for loan in data["loans"]:
         if not loan["returned"]:
             lines.append(str(loan["id"]) + "번 " + loan["item"] + " " + loan["borrower"]
                          + " 기한 " + loan["due_date"])
     return "\n".join(lines)
+
+
+def add_item(data, item_name, category, count):
+    get_rule(category)                             # 등록할 수 있는 분류인지 검사
+    if item_name in data["items"]:
+        item = data["items"][item_name]
+        if item["category"] != category:
+            raise ValueError("이미 다른 분류로 등록된 품목입니다: " + item_name
+                             + " (" + item["category"] + ")")
+        item["stock"] += count
+        return "재고 추가: " + item_name + " 재고 " + str(item["stock"])
+    data["items"][item_name] = {"category": category, "stock": count}
+    return "물품 추가: " + item_name + " (" + category + ") 재고 " + str(count)
 
 
 def rent(data, item_name, borrower, rent_date):
@@ -26,7 +41,7 @@ def rent(data, item_name, borrower, rent_date):
     if item["stock"] <= 0:
         raise ValueError("재고가 없습니다: " + item_name)
 
-    rule = get_rule(item["category"])          # 규칙 선택 (Strategy)
+    rule = get_rule(item["category"])              # 규칙 선택 (Strategy)
     due_date = rule.due_date(rent_date)
 
     loan_id = len(data["loans"]) + 1
@@ -42,7 +57,7 @@ def rent(data, item_name, borrower, rent_date):
     })
     item["stock"] -= 1
     return ("대여 완료: " + str(loan_id) + "번 " + item_name + " (" + borrower
-            + ") 반납 기한 " + str(due_date))
+            + ") 반납 기한 " + str(due_date) + "\n안내: " + rule.describe())
 
 
 def find_loan(data, loan_id):

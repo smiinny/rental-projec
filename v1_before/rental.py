@@ -24,13 +24,46 @@ def handle_command(line, data_path):
         lines = ["[물품]"]
         for name in data["items"]:
             item = data["items"][name]
-            lines.append(name + " (" + item["category"] + ") 재고 " + str(item["stock"]))
+            # 분류별 안내 문구 (분류 조건 1번째)
+            if item["category"] == "일반":
+                guide = "3일 대여, 연체료 하루 500원(최대 3000원)"
+            elif item["category"] == "전자기기":
+                guide = "1일 대여, 연체료 하루 1000원"
+            else:
+                return "오류: 알 수 없는 분류입니다: " + item["category"]
+            lines.append(name + " (" + item["category"] + ") 재고 " + str(item["stock"])
+                         + " | " + guide)
         lines.append("[대여 중]")
         for loan in data["loans"]:
             if not loan["returned"]:
                 lines.append(str(loan["id"]) + "번 " + loan["item"] + " " + loan["borrower"]
                              + " 기한 " + loan["due_date"])
         return "\n".join(lines)
+
+    elif parts[0] == "add":
+        if len(parts) != 4:
+            return "오류: 입력 형식이 잘못되었습니다"
+        item_name = parts[1]
+        category = parts[2]
+        if not parts[3].isdigit() or int(parts[3]) < 1:
+            return "오류: 수량은 1 이상의 숫자여야 합니다: " + parts[3]
+        count = int(parts[3])
+        # 등록할 수 있는 분류인지 검사 (분류 조건 2번째)
+        if category != "일반" and category != "전자기기":
+            return "오류: 알 수 없는 분류입니다: " + category
+        if item_name in data["items"]:
+            item = data["items"][item_name]
+            if item["category"] != category:
+                return ("오류: 이미 다른 분류로 등록된 품목입니다: " + item_name
+                        + " (" + item["category"] + ")")
+            item["stock"] = item["stock"] + count
+            message = "재고 추가: " + item_name + " 재고 " + str(item["stock"])
+        else:
+            data["items"][item_name] = {"category": category, "stock": count}
+            message = "물품 추가: " + item_name + " (" + category + ") 재고 " + str(count)
+        with open(data_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return message
 
     elif parts[0] == "rent":
         if len(parts) != 4:
@@ -46,11 +79,13 @@ def handle_command(line, data_path):
         item = data["items"][item_name]
         if item["stock"] <= 0:
             return "오류: 재고가 없습니다: " + item_name
-        # 품목 분류별 대여 기간 (규칙이 늘어나면 이 if 문을 계속 고쳐야 한다)
+        # 분류별 대여 기간과 안내 문구 (분류 조건 3번째)
         if item["category"] == "일반":
             days = 3
+            guide = "3일 대여, 연체료 하루 500원(최대 3000원)"
         elif item["category"] == "전자기기":
             days = 1
+            guide = "1일 대여, 연체료 하루 1000원"
         else:
             return "오류: 알 수 없는 분류입니다: " + item["category"]
         due_date = rent_date + timedelta(days=days)
@@ -69,7 +104,7 @@ def handle_command(line, data_path):
         with open(data_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         return ("대여 완료: " + str(loan_id) + "번 " + item_name + " (" + borrower
-                + ") 반납 기한 " + str(due_date))
+                + ") 반납 기한 " + str(due_date) + "\n안내: " + guide)
 
     elif parts[0] == "return":
         if len(parts) != 3:
@@ -96,7 +131,7 @@ def handle_command(line, data_path):
         late_days = (return_date - due_date).days
         if late_days < 0:
             late_days = 0
-        # 품목 분류별 연체료 (대여 기간과 같은 분류 조건이 여기에도 반복된다)
+        # 분류별 연체료 (분류 조건 4번째)
         category = data["items"][loan["item"]]["category"]
         if category == "일반":
             fee = late_days * 500
@@ -123,7 +158,7 @@ def main():
     if len(sys.argv) != 2:
         print("사용법: python rental.py <자료파일.json>")
         return
-    print("명령: rent <품목> <이름> <날짜> | return <번호> <날짜> | list | quit")
+    print("명령: rent <품목> <이름> <날짜> | return <번호> <날짜> | add <품목> <분류> <수량> | list | quit")
     for line in sys.stdin:
         line = line.strip()
         if line == "quit":

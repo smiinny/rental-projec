@@ -20,6 +20,13 @@ def parse_command(line):
     if name == "list":
         return "list", []
 
+    if name == "add":
+        if len(parts) != 4:
+            raise ValueError("입력 형식이 잘못되었습니다")
+        if not parts[3].isdigit() or int(parts[3]) < 1:
+            raise ValueError("수량은 1 이상의 숫자여야 합니다: " + parts[3])
+        return "add", [parts[1], parts[2], int(parts[3])]
+
     if name == "rent":
         if len(parts) != 4:
             raise ValueError("입력 형식이 잘못되었습니다")
