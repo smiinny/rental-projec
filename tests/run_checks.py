@@ -4,7 +4,8 @@
 결과는 화면에 출력되고 results/check_log.txt 에도 저장된다.
 
 검사 내용
- 1) 기존 검사 18개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지,
+ 1) 기존 검사 20개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지,
+    저장이 일어나는 검사는 대표 저장값(재고·기한·연체료 등)이 예상값과 같은지,
     그리고 오류가 난 명령마다 그 명령 직전과 직후의 자료 파일이 같은지(오류 때 저장하지 않는지),
     자료 파일이 없을 때 실행 후에도 파일이 새로 생기지 않는지
  2) 새 기능 검사 4개: v3에서 장기 대여 규칙이 동작하고 저장값이 예상과 같은지,
@@ -143,8 +144,39 @@ OLD_CASES.append(
       "오류: 입력 형식이 잘못되었습니다",
       "대여 완료: 1번 우산 (김민수) 반납 기한 2026-11-05", GUIDE_STANDARD]))
 
+# [7차 피드백 반영] JSON 문법은 맞지만 이 프로그램의 구조(items·loans, 자료형)가 아닌 파일
+OLD_CASES.append(
+    ("잘못된 입력", "구조가 잘못된 자료 파일 1: 빈 객체 {}",
+     ["list", "rent 우산 김민수 2026-11-02", "add 우산 일반 1"],
+     ["오류: 자료 파일 구조가 잘못되었습니다: data.json"] * 3))
+OLD_CASES.append(
+    ("잘못된 입력", "구조가 잘못된 자료 파일 2: 재고가 글자, loans가 목록이 아님",
+     ["list", "rent 우산 김민수 2026-11-02", "return 1 2026-11-03"],
+     ["오류: 자료 파일 구조가 잘못되었습니다: data.json"] * 3))
+
+# [7차 피드백 반영] 저장이 일어나는 정상·경계 검사는 세 버전의 JSON이 서로 같은지뿐 아니라
+# 대표 저장값이 예상값과 같은지도 확인한다: 검사 번호 -> [(설명, 꺼내는 함수, 예상값)]
+OLD_SAVED = {
+    1: [("우산 재고", lambda d: d["items"]["우산"]["stock"], 2),
+        ("1번 반납 여부·반납일·연체료", lambda d: (d["loans"][0]["returned"], d["loans"][0]["return_date"],
+                                         d["loans"][0]["fee"]), (True, "2026-11-05", 0))],
+    2: [("보조배터리 재고", lambda d: d["items"]["보조배터리"]["stock"], 1),
+        ("1번 기한·연체료", lambda d: (d["loans"][0]["due_date"], d["loans"][0]["fee"]), ("2026-11-03", 2000))],
+    3: [("우산 재고", lambda d: d["items"]["우산"]["stock"], 1),
+        ("1번 반납 여부·반납일", lambda d: (d["loans"][0]["returned"], d["loans"][0]["return_date"]), (False, None))],
+    4: [("삼각대 품목", lambda d: d["items"]["삼각대"], {"category": "전자기기", "stock": 1}),
+        ("대여 기록 수", lambda d: len(d["loans"]), 1)],
+    7: [("1번 연체료(상한)", lambda d: d["loans"][0]["fee"], 3000)],
+    8: [("돗자리 재고", lambda d: d["items"]["돗자리"]["stock"], 0),
+        ("1번 품목·기한", lambda d: (d["loans"][0]["item"], d["loans"][0]["due_date"]), ("돗자리", "2026-11-05"))],
+    17: [("삼각대 재고(9자리)", lambda d: d["items"]["삼각대"]["stock"], 999999999),
+         ("1번 반납 여부", lambda d: d["loans"][0]["returned"], True)],
+}
+
 # 기본 자료가 아닌 파일로 실행하는 검사
-DATA_FOR = {"손상된 자료 파일(JSON 형식 오류)": "items_broken.json"}
+DATA_FOR = {"손상된 자료 파일(JSON 형식 오류)": "items_broken.json",
+            "구조가 잘못된 자료 파일 1: 빈 객체 {}": "items_empty_object.json",
+            "구조가 잘못된 자료 파일 2: 재고가 글자, loans가 목록이 아님": "items_wrong_types.json"}
 
 NEW_CASES = [
     ("새 기능", "장기 품목 대여(14일)와 안내 문구",
@@ -251,7 +283,17 @@ def main():
         same_saved = saves["v1"] == saves["v2"] == saves["v3"]
         keep = {v: check_error_keeps_file(v, data_name, commands, missing) for v in VERSIONS}
         keep_ok = all(not changed for _, changed in keep.values())
-        ok = all(outputs[v] == expected for v in VERSIONS) and same_saved and keep_ok
+        value_lines = []
+        values_ok = True
+        if number in OLD_SAVED:
+            for version in VERSIONS:
+                data = json.loads(saves[version])
+                for label, get, want in OLD_SAVED[number]:
+                    got = get(data)
+                    values_ok = values_ok and got == want
+                    if version == "v1":
+                        value_lines.append("%s 예상 %s / 실제 %s" % (label, want, got))
+        ok = all(outputs[v] == expected for v in VERSIONS) and same_saved and keep_ok and values_ok
         if missing:
             ok = ok and all(saves[v] is None for v in VERSIONS)
         if not ok:
@@ -270,6 +312,9 @@ def main():
                   + str(all(saves[v] is None for v in VERSIONS)))
         else:
             write("    저장된 JSON이 v1 = v2 = v3 : " + str(same_saved))
+        if value_lines:
+            write_lines("저장값 대조: ", value_lines)
+            write("    대표 저장값이 예상과 같음(v1·v2·v3) : " + str(values_ok))
         checked = keep["v1"][0]
         if checked:
             write("    오류 명령 %d개의 직전·직후 자료 파일이 같음(v1·v2·v3) : %s" % (checked, keep_ok))
