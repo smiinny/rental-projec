@@ -5,8 +5,7 @@ data 딕셔너리를 받아 값을 바꾸고, 결과 문장을 돌려준다.
 """
 from inputs import parse_date
 from rules import get_rule
-
-MAX_STOCK = 999999999    # 재고 한도(보관 중 재고 + 대여 중 수량): 넘으면 저장하지 않고 오류
+from storage import MAX_STOCK    # 재고 한도(보관 중 재고 + 대여 중 수량)는 읽기 검사와 같은 값을 쓴다
 
 
 def list_text(data):

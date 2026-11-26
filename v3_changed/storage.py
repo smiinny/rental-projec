@@ -4,6 +4,8 @@ import os
 import re
 from datetime import datetime
 
+MAX_STOCK = 999999999    # 재고 한도(보관 중 재고 + 대여 중 수량): 넘는 자료는 읽지 않고, 넘게 만드는 추가는 거부
+
 
 def parse_json_int(text):
     """자료 파일(JSON) 안의 정수를 바꾼다. 15자리를 넘으면 ValueError.
@@ -82,6 +84,11 @@ def is_valid_data(data):
             if return_date is None or return_date < rent_date:
                 return False
         elif loan.get("return_date") is not None or fee != 0:
+            return False
+    # 품목마다 보관 중 재고 + 반납되지 않은 수량이 재고 한도(MAX_STOCK)를 넘으면 안 된다
+    for name, item in items.items():
+        renting = sum(1 for loan in loans if loan["item"] == name and not loan["returned"])
+        if item["stock"] + renting > MAX_STOCK:
             return False
     return True
 

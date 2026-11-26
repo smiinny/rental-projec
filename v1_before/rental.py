@@ -91,6 +91,11 @@ def is_valid_data(data):
                 return False
         elif loan.get("return_date") is not None or fee != 0:
             return False
+    # 품목마다 보관 중 재고 + 반납되지 않은 수량이 재고 한도(MAX_STOCK)를 넘으면 안 된다
+    for name, item in items.items():
+        renting = sum(1 for loan in loans if loan["item"] == name and not loan["returned"])
+        if item["stock"] + renting > MAX_STOCK:
+            return False
     return True
 
 
