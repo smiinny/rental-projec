@@ -6,6 +6,8 @@ data 딕셔너리를 받아 값을 바꾸고, 결과 문장을 돌려준다.
 from inputs import parse_date
 from rules import get_rule
 
+MAX_STOCK = 999999999    # 누적 재고 한도: 넘으면 저장하지 않고 오류 (자료 파일 읽기 한도 15자리보다 작게)
+
 
 def list_text(data):
     lines = ["[물품]"]
@@ -28,6 +30,8 @@ def add_item(data, item_name, category, count):
         if item["category"] != category:
             raise ValueError("이미 다른 분류로 등록된 품목입니다: " + item_name
                              + " (" + item["category"] + ")")
+        if item["stock"] + count > MAX_STOCK:
+            raise ValueError("재고는 최대 " + str(MAX_STOCK) + "개까지입니다: " + item_name)
         item["stock"] += count
         return "재고 추가: " + item_name + " 재고 " + str(item["stock"])
     data["items"][item_name] = {"category": category, "stock": count}
