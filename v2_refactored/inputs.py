@@ -16,17 +16,18 @@ def parse_date(text):
         raise ValueError("날짜 형식이 잘못되었습니다(YYYY-MM-DD): " + text)
 
 
-def to_number(text):
-    """0~9로만 된 글자를 정수로 바꾼다. 바꿀 수 없으면 None.
+MAX_DIGITS = 9    # 수량·대여 번호는 0~9로 된 최대 9자리 숫자만 받는다 (Python 버전과 무관하게 같은 기준)
 
-    isdigit()만 쓰면 '²'도 통과하고, 4300자리를 넘는 숫자는 int()가 ValueError를 내므로 둘 다 막는다.
+
+def to_number(text):
+    """0~9로 된 최대 9자리 글자를 정수로 바꾼다. 조건에 맞지 않으면 None.
+
+    isdigit()만 쓰면 '²'도 통과하고, 아주 긴 숫자는 Python 버전에 따라 int()가 받기도 하고
+    거부하기도 하므로, 프로그램이 직접 자릿수를 제한해 어느 환경에서나 같은 결과를 낸다.
     """
-    if not (text.isascii() and text.isdigit()):
+    if not (text.isascii() and text.isdigit()) or len(text) > MAX_DIGITS:
         return None
-    try:
-        return int(text)
-    except ValueError:
-        return None
+    return int(text)
 
 
 def parse_command(line):

@@ -8,6 +8,8 @@ import re
 import sys
 from datetime import datetime, timedelta
 
+MAX_DIGITS = 9    # 수량·대여 번호는 0~9로 된 최대 9자리 숫자만 받는다 (Python 버전과 무관하게 같은 기준)
+
 
 def handle_command(line, data_path):
     # --- 저장된 자료 읽기 ---
@@ -50,14 +52,10 @@ def handle_command(line, data_path):
             return "오류: 입력 형식이 잘못되었습니다"
         item_name = parts[1]
         category = parts[2]
-        # isdigit()은 '²' 같은 문자도 숫자로 보므로 0~9만 허용한다
+        # isdigit()은 '²' 같은 문자도 숫자로 보므로 0~9만, 그리고 최대 9자리까지만 허용한다
         count = 0
-        if parts[3].isascii() and parts[3].isdigit():
-            try:
-                count = int(parts[3])
-            except ValueError:
-                # 4300자리를 넘는 숫자는 int()가 바꾸지 못한다
-                count = 0
+        if parts[3].isascii() and parts[3].isdigit() and len(parts[3]) <= MAX_DIGITS:
+            count = int(parts[3])
         if count < 1:
             return "오류: 수량은 1 이상의 숫자여야 합니다: " + parts[3]
         # 등록할 수 있는 분류인지 검사 (분류 조건 2번째)
@@ -128,13 +126,9 @@ def handle_command(line, data_path):
     elif parts[0] == "return":
         if len(parts) != 3:
             return "오류: 입력 형식이 잘못되었습니다"
-        if not (parts[1].isascii() and parts[1].isdigit()):
+        if not (parts[1].isascii() and parts[1].isdigit() and len(parts[1]) <= MAX_DIGITS):
             return "오류: 대여 번호는 숫자여야 합니다: " + parts[1]
-        try:
-            loan_id = int(parts[1])
-        except ValueError:
-            # 4300자리를 넘는 숫자는 int()가 바꾸지 못한다
-            return "오류: 대여 번호는 숫자여야 합니다: " + parts[1]
+        loan_id = int(parts[1])
         try:
             if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", parts[2]):
                 raise ValueError
