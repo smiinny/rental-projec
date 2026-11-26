@@ -18,6 +18,8 @@ GitHub 저장소: https://github.com/smiinny/rental-projec
 - 수량·대여 번호는 0~9로 된 **최대 9자리** 숫자만 받습니다. 프로그램이 자릿수를 직접 검사하므로
   Python 버전(긴 정수 변환 한도 유무)과 관계없이 같은 결과가 나옵니다.
 - 자료 파일(JSON)은 `items`(품목별 `category` 글자·`stock` 0 이상 정수)와 `loans`(대여 기록 목록)가 있어야 합니다.
+  대여 기록은 번호가 1부터 차례대로이고, `item`은 `items`에 있는 품목 이름(글자), 날짜는 실제 있는 YYYY-MM-DD,
+  반납 전이면 `return_date`가 `null`·연체료 0, 반납했으면 반납일과 0 이상 연체료가 있어야 합니다.
   문법은 맞아도 이 구조가 아니면 "자료 파일 구조가 잘못되었습니다" 오류를 내고 파일을 바꾸지 않습니다.
 - 외부 패키지 없음: 표준 라이브러리만 사용하므로 `pip install`이 필요 없습니다.
 
@@ -59,15 +61,19 @@ python v3_changed/web_app.py data/items_v3.json
 ## 3. 검사 방법
 
 ```
-python tests/run_checks.py
+python tests/run_checks.py      # 정해 둔 검사 26개
+python tests/fuzz_check.py      # 무작위 검사 300회 (횟수·씨드 지정: python tests/fuzz_check.py 3000 2)
 ```
 
-- 기존 검사 20개(정상 4, 경계 6, 잘못된 입력 10): 같은 입력을 v1·v2·v3에 넣고, 예상 결과와 실제 출력,
+- 기존 검사 22개(정상 4, 경계 6, 잘못된 입력 12): 같은 입력을 v1·v2·v3에 넣고, 예상 결과와 실제 출력,
   저장된 JSON이 모두 같은지 확인합니다. 저장이 일어나는 검사 7개는 대표 저장값(재고·기한·반납일·연체료)을
   예상값과도 직접 대조합니다. 오류가 난 명령마다 그 직전과 직후의 자료 파일이 같은지(오류 때 저장하지 않는지),
   자료 파일이 없을 때 실행 후에도 파일이 생기지 않는지도 확인합니다.
 - 새 기능 검사 4개: 장기 대여 규칙이 v3에서 동작하고 저장된 JSON 값(재고, 기한, 연체료)이 예상과 같은지,
   v1·v2에서는 오류가 나고 자료 파일이 바뀌지 않는지 확인합니다.
+- 무작위 검사: 무작위 명령(틀린 숫자·날짜·인수 개수 포함)과 일부러 망가뜨린 자료 파일을 v1·v2·v3에 넣어
+  출력·저장 결과가 버전끼리 다르거나 프로그램이 멈추는(Traceback) 경우가 있는지 찾습니다.
+  결과는 `results/fuzz_log.txt`에 저장됩니다.
 - 결과는 화면에 나오고 `results/check_log.txt`에 저장됩니다. 검사는 자료 파일의 복사본으로
   실행하므로 `data/` 안의 예시 자료는 바뀌지 않습니다.
 
@@ -89,6 +95,8 @@ data/
   items_broken.json     검사용 손상된 자료 (JSON 문법 오류)
   items_empty_object.json  검사용 구조가 잘못된 자료 ({}: items·loans 없음)
   items_wrong_types.json   검사용 구조가 잘못된 자료 (재고가 글자, loans가 목록이 아님)
+  items_bad_loan_item.json 검사용 구조가 잘못된 자료 (대여 기록의 item이 목록)
+  items_bad_dates.json     검사용 구조가 잘못된 자료 (저장된 대여일이 없는 날짜)
 v1_before/
   rental.py             구조 개선 전 기본 프로그램
 v2_refactored/
@@ -102,8 +110,10 @@ v3_changed/
   web_app.py            웹 화면 (선택 확장)
 tests/
   run_checks.py         검사 코드 (예상·실제 결과 비교)
+  fuzz_check.py         무작위 검사 (버전 간 차이·멈춤 찾기)
 results/
   check_log.txt         검사 실행 결과 기록
+  fuzz_log.txt          무작위 검사 결과 기록
   web_check.txt         웹 화면 동작 기록
   web_screen.png        웹 화면 캡처
 ```

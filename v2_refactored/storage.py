@@ -1,14 +1,26 @@
 """저장 담당: JSON 파일을 읽고 쓰는 일만 한다."""
 import json
+import re
+from datetime import datetime
 
 
 def is_valid_data(data):
-    """읽은 JSON이 이 프로그램이 쓰는 구조인지 확인한다.
+    """읽은 JSON이 이 프로그램이 쓰는 구조인지 확인한다. 맞으면 True.
 
-    최상위는 딕셔너리이고 items는 {품목: {"category": 글자, "stock": 0 이상 정수}},
-    loans는 대여 기록 딕셔너리의 목록이어야 한다. 대여 기록의 품목은 items에 있어야 한다.
-    문법만 맞는 {}나 [] 같은 파일이 들어와 KeyError로 멈추는 것을 막는다.
+    - 최상위는 딕셔너리이고 items는 {품목: {"category": 글자, "stock": 0 이상 정수}}
+    - loans는 대여 기록 딕셔너리의 목록이고, 번호(id)는 1부터 차례대로 붙어 있어야 한다
+    - 대여 기록의 item은 items에 있는 품목 이름(글자), 날짜는 실제 있는 YYYY-MM-DD 날짜
+    - 반납 전 기록은 return_date가 null이고 연체료 0, 반납한 기록은 반납일과 0 이상 연체료가 있어야 한다
+    문법만 맞는 {}, 자료형이 틀린 값, 해석할 수 없는 날짜가 들어와 프로그램이 멈추는 것을 막는다.
     """
+    def to_date(text):
+        if not isinstance(text, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
+            return None
+        try:
+            return datetime.strptime(text, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
     if not isinstance(data, dict):
         return False
     items = data.get("items")
@@ -21,18 +33,27 @@ def is_valid_data(data):
         stock = item.get("stock")
         if type(stock) is not int or stock < 0:
             return False
-    for loan in loans:
+    for number, loan in enumerate(loans, start=1):
         if not isinstance(loan, dict):
             return False
-        if type(loan.get("id")) is not int or loan.get("item") not in items:
+        if type(loan.get("id")) is not int or loan.get("id") != number:
+            return False
+        if not isinstance(loan.get("item"), str) or loan.get("item") not in items:
             return False
         if not isinstance(loan.get("borrower"), str) or type(loan.get("returned")) is not bool:
             return False
-        if not isinstance(loan.get("rent_date"), str) or not isinstance(loan.get("due_date"), str):
+        rent_date = to_date(loan.get("rent_date"))
+        due_date = to_date(loan.get("due_date"))
+        if rent_date is None or due_date is None or due_date < rent_date:
             return False
-        if loan.get("return_date") is not None and not isinstance(loan.get("return_date"), str):
+        fee = loan.get("fee")
+        if type(fee) is not int or fee < 0:
             return False
-        if type(loan.get("fee")) is not int:
+        if loan["returned"]:
+            return_date = to_date(loan.get("return_date"))
+            if return_date is None or return_date < rent_date:
+                return False
+        elif loan.get("return_date") is not None or fee != 0:
             return False
     return True
 

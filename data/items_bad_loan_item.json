@@ -1,0 +1,26 @@
+{
+  "items": {
+    "우산": {
+      "category": "일반",
+      "stock": 1
+    },
+    "보조배터리": {
+      "category": "전자기기",
+      "stock": 1
+    }
+  },
+  "loans": [
+    {
+      "id": 1,
+      "item": [
+        "우산"
+      ],
+      "borrower": "김민수",
+      "rent_date": "2026-11-02",
+      "due_date": "2026-11-05",
+      "returned": false,
+      "return_date": null,
+      "fee": 0
+    }
+  ]
+}
