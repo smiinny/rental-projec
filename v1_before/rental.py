@@ -49,15 +49,9 @@ def handle_command(line, data_path):
         item_name = parts[1]
         category = parts[2]
         # isdigit()은 '²' 같은 문자도 숫자로 보므로 0~9만 허용한다
-        count = 0
-        if parts[3].isascii() and parts[3].isdigit():
-            try:
-                count = int(parts[3])
-            except ValueError:
-                # 4300자리를 넘는 숫자는 int()가 바꾸지 못한다
-                count = 0
-        if count < 1:
+        if not (parts[3].isascii() and parts[3].isdigit()) or int(parts[3]) < 1:
             return "오류: 수량은 1 이상의 숫자여야 합니다: " + parts[3]
+        count = int(parts[3])
         # 등록할 수 있는 분류인지 검사 (분류 조건 2번째)
         if category != "일반" and category != "전자기기":
             return "오류: 알 수 없는 분류입니다: " + category
@@ -128,11 +122,7 @@ def handle_command(line, data_path):
             return "오류: 입력 형식이 잘못되었습니다"
         if not (parts[1].isascii() and parts[1].isdigit()):
             return "오류: 대여 번호는 숫자여야 합니다: " + parts[1]
-        try:
-            loan_id = int(parts[1])
-        except ValueError:
-            # 4300자리를 넘는 숫자는 int()가 바꾸지 못한다
-            return "오류: 대여 번호는 숫자여야 합니다: " + parts[1]
+        loan_id = int(parts[1])
         try:
             if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", parts[2]):
                 raise ValueError

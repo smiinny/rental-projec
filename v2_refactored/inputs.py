@@ -16,17 +16,9 @@ def parse_date(text):
         raise ValueError("날짜 형식이 잘못되었습니다(YYYY-MM-DD): " + text)
 
 
-def to_number(text):
-    """0~9로만 된 글자를 정수로 바꾼다. 바꿀 수 없으면 None.
-
-    isdigit()만 쓰면 '²'도 통과하고, 4300자리를 넘는 숫자는 int()가 ValueError를 내므로 둘 다 막는다.
-    """
-    if not (text.isascii() and text.isdigit()):
-        return None
-    try:
-        return int(text)
-    except ValueError:
-        return None
+def is_number(text):
+    """0~9로만 이루어진 글자인지 확인한다. isdigit()만 쓰면 '²'도 통과해 int()에서 오류가 난다."""
+    return text.isascii() and text.isdigit()
 
 
 def parse_command(line):
@@ -42,10 +34,9 @@ def parse_command(line):
     if name == "add":
         if len(parts) != 4:
             raise ValueError("입력 형식이 잘못되었습니다")
-        count = to_number(parts[3])
-        if count is None or count < 1:
+        if not is_number(parts[3]) or int(parts[3]) < 1:
             raise ValueError("수량은 1 이상의 숫자여야 합니다: " + parts[3])
-        return "add", [parts[1], parts[2], count]
+        return "add", [parts[1], parts[2], int(parts[3])]
 
     if name == "rent":
         if len(parts) != 4:
@@ -55,9 +46,8 @@ def parse_command(line):
     if name == "return":
         if len(parts) != 3:
             raise ValueError("입력 형식이 잘못되었습니다")
-        loan_id = to_number(parts[1])
-        if loan_id is None:
+        if not is_number(parts[1]):
             raise ValueError("대여 번호는 숫자여야 합니다: " + parts[1])
-        return "return", [loan_id, parse_date(parts[2])]
+        return "return", [int(parts[1]), parse_date(parts[2])]
 
     raise ValueError("알 수 없는 명령입니다: " + name)
