@@ -36,7 +36,10 @@ def write_json_safely(data_path, data):
         os.replace(temp_path, data_path)     # 다 쓴 임시 파일로 한 번에 교체
     except OSError:
         if os.path.isfile(temp_path):
-            os.remove(temp_path)             # 쓰다 만 임시 파일만 지운다
+            try:
+                os.remove(temp_path)         # 쓰다 만 임시 파일만 지운다
+            except OSError:
+                pass                         # 지우지 못해도 원본은 그대로이므로 저장 실패 안내를 유지한다
         raise ValueError("자료 파일을 저장할 수 없습니다: " + data_path)
 
 

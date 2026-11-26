@@ -27,7 +27,8 @@ GitHub 저장소: https://github.com/smiinny/rental-projec
   UTF-8이 아니거나 JSON 문법이 깨졌거나 15자리를 넘는 정수가 있으면 "자료 파일 형식이 잘못되었습니다",
   폴더처럼 열 수 없으면 "자료 파일을 읽을 수 없습니다"를 냅니다.
 - 저장은 임시 파일(자료 파일 이름 + `.tmp`)에 끝까지 쓴 뒤 원본과 바꿉니다. 저장에 실패하면
-  "자료 파일을 저장할 수 없습니다"를 내고 원본 자료 파일은 그대로 남습니다.
+  "자료 파일을 저장할 수 없습니다"를 내고 원본 자료 파일은 그대로 남습니다. 쓰다 만 임시 파일을 지우는 것까지
+  실패해도 같은 안내를 냅니다(검사 코드의 '저장 실패 처리 검사').
 - 외부 패키지 없음: 표준 라이브러리만 사용하므로 `pip install`이 필요 없습니다.
 
 ## 2. 실행 방법
@@ -68,7 +69,7 @@ python v3_changed/web_app.py data/items_v3.json
 ## 3. 검사 방법
 
 ```
-python tests/run_checks.py      # 정해 둔 검사 33개
+python tests/run_checks.py      # 정해 둔 검사 34개
 python tests/fuzz_check.py      # 무작위 검사: 씨드 1로 300회
 python tests/fuzz_check.py 1000 1 2 3   # 제출 로그와 같은 실행: 씨드 1·2·3 각 1000회(총 3000회)
 ```

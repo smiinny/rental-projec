@@ -8,6 +8,7 @@
     저장이 일어나는 검사는 대표 저장값(재고·기한·연체료 등)이 예상값과 같은지,
     그리고 오류가 난 명령마다 그 명령 직전과 직후의 자료 파일이 같은지(오류 때 저장하지 않는지),
     자료 파일이 없을 때 실행 후에도 파일이 새로 생기지 않는지
+ 3) 저장 실패 처리 검사 1개: 임시 파일 교체와 정리가 모두 실패해도 저장 실패 안내가 나오고 원본이 남는지
  2) 새 기능 검사 4개: v3에서 장기 대여 규칙이 동작하고 저장값이 예상과 같은지,
     v1·v2에서는 오류가 나고 자료 파일이 바뀌지 않는지
 """
@@ -338,6 +339,51 @@ def check_error_keeps_file(version, data_name, commands, missing_file=False):
     return errors, changed
 
 
+def check_cleanup_failure(write):
+    """[15차 피드백 반영] 임시 파일로 교체(os.replace)도, 임시 파일 정리(os.remove)도 실패하는 상황.
+
+    실제로 만들기 어려운 실패라서, 세 버전의 저장 함수(write_json_safely)를 직접 불러
+    os.replace와 os.remove를 잠시 '항상 실패'하도록 바꿔 놓고 확인한다.
+    기대: 프로그램이 멈추지 않고 "자료 파일을 저장할 수 없습니다" 안내(ValueError)가 나오며, 원본은 그대로다.
+    """
+    import importlib.util
+    paths = {"v1": os.path.join(ROOT, "v1_before", "rental.py"),
+             "v2": os.path.join(ROOT, "v2_refactored", "storage.py"),
+             "v3": os.path.join(ROOT, "v3_changed", "storage.py")}
+    all_ok = True
+    for version, path in paths.items():
+        spec = importlib.util.spec_from_file_location("check_" + version, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as folder:
+            data_path = os.path.join(folder, "data.json")
+            shutil.copy(os.path.join(ROOT, "data", "items.json"), data_path)
+            with open(data_path, "rb") as f:
+                before = f.read()
+
+            def always_fail(*args):
+                raise OSError("일부러 낸 실패")
+            real_replace, real_remove = os.replace, os.remove
+            os.replace, os.remove = always_fail, always_fail
+            try:
+                module.write_json_safely(data_path, {"items": {}, "loans": []})
+                message = "(오류 없이 끝남)"
+            except ValueError as error:
+                message = "오류: " + str(error)
+            except Exception as error:      # 다른 예외가 새어 나오면 실패
+                message = "처리되지 않은 " + type(error).__name__
+            finally:
+                os.replace, os.remove = real_replace, real_remove
+            with open(data_path, "rb") as f:
+                after = f.read()
+        expected = "오류: 자료 파일을 저장할 수 없습니다: " + data_path
+        ok = message == expected and before == after
+        all_ok = all_ok and ok
+        write("    %s: %s | 원본 그대로: %s" % (version, message.replace(folder, "<임시폴더>"), before == after))
+    write("[저장 실패 검사] 교체·임시 파일 정리 모두 실패 -> " + ("통과" if all_ok else "실패"))
+    return all_ok
+
+
 def main():
     log = []
     fail = 0
@@ -433,7 +479,13 @@ def main():
         write("    v1·v2 자료 파일이 바뀌지 않음 : " + str(unchanged))
 
     write("")
-    total = len(OLD_CASES) + len(NEW_CASES)
+    write("")
+    write("=== 3) 저장 실패 처리 검사: 교체와 임시 파일 정리가 모두 실패하는 경우 ===")
+    ok = check_cleanup_failure(write)
+    if not ok:
+        fail += 1
+
+    total = len(OLD_CASES) + len(NEW_CASES) + 1
     write("=== 요약: %d개 중 %d개 통과, %d개 실패 ===" % (total, total - fail, fail))
 
     os.makedirs(os.path.join(ROOT, "results"), exist_ok=True)
