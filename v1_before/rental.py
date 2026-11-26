@@ -9,7 +9,7 @@ import re
 import sys
 from datetime import datetime, timedelta
 
-MAX_STOCK = 999999999    # 누적 재고 한도: 넘으면 저장하지 않고 오류 (자료 파일 읽기 한도 15자리보다 작게)
+MAX_STOCK = 999999999    # 재고 한도(보관 중 재고 + 대여 중 수량): 넘으면 저장하지 않고 오류
 MAX_DIGITS = 9    # 수량·대여 번호는 0~9로 된 최대 9자리 숫자만 받는다 (Python 버전과 무관하게 같은 기준)
 
 
@@ -155,7 +155,12 @@ def handle_command(line, data_path):
             if item["category"] != category:
                 return ("오류: 이미 다른 분류로 등록된 품목입니다: " + item_name
                         + " (" + item["category"] + ")")
-            if item["stock"] + count > MAX_STOCK:
+            # 대여 중인 수량도 반납되면 재고로 돌아오므로 함께 센다
+            renting = 0
+            for loan in data["loans"]:
+                if loan["item"] == item_name and not loan["returned"]:
+                    renting = renting + 1
+            if item["stock"] + renting + count > MAX_STOCK:
                 return "오류: 재고는 최대 " + str(MAX_STOCK) + "개까지입니다: " + item_name
             item["stock"] = item["stock"] + count
             message = "재고 추가: " + item_name + " 재고 " + str(item["stock"])
