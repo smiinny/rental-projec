@@ -10,6 +10,11 @@ def parse_date(text):
         raise ValueError("날짜 형식이 잘못되었습니다(YYYY-MM-DD): " + text)
 
 
+def is_number(text):
+    """0~9로만 이루어진 글자인지 확인한다. isdigit()만 쓰면 '²'도 통과해 int()에서 오류가 난다."""
+    return text.isascii() and text.isdigit()
+
+
 def parse_command(line):
     """한 줄 명령을 (명령 이름, 값 목록)으로 바꾼다. 형식이 틀리면 ValueError."""
     parts = line.split()
@@ -23,7 +28,7 @@ def parse_command(line):
     if name == "add":
         if len(parts) != 4:
             raise ValueError("입력 형식이 잘못되었습니다")
-        if not parts[3].isdigit() or int(parts[3]) < 1:
+        if not is_number(parts[3]) or int(parts[3]) < 1:
             raise ValueError("수량은 1 이상의 숫자여야 합니다: " + parts[3])
         return "add", [parts[1], parts[2], int(parts[3])]
 
@@ -35,7 +40,7 @@ def parse_command(line):
     if name == "return":
         if len(parts) != 3:
             raise ValueError("입력 형식이 잘못되었습니다")
-        if not parts[1].isdigit():
+        if not is_number(parts[1]):
             raise ValueError("대여 번호는 숫자여야 합니다: " + parts[1])
         return "return", [int(parts[1]), parse_date(parts[2])]
 

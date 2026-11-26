@@ -4,9 +4,11 @@
 결과는 화면에 출력되고 results/check_log.txt 에도 저장된다.
 
 검사 내용
- 1) 기존 검사 12개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지
- 2) 새 기능 검사 4개: v3에서 장기 대여 규칙이 동작하는지 (v2에서는 오류가 나야 정상)
+ 1) 기존 검사 14개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지
+ 2) 새 기능 검사 4개: v3에서 장기 대여 규칙이 동작하고 저장값이 예상과 같은지,
+    v1·v2에서는 오류가 나고 자료 파일이 바뀌지 않는지
 """
+import json
 import os
 import shutil
 import subprocess
@@ -86,7 +88,21 @@ OLD_CASES = [
     ("잘못된 입력", "자료 파일 누락",
      ["list"],
      ["오류: 자료 파일을 찾을 수 없습니다: " + MISSING]),
+    # [피드백 반영] isdigit()은 통과하지만 int()로 바꿀 수 없는 숫자 문자
+    ("잘못된 입력", "0~9가 아닌 숫자 문자(²)를 수량·대여 번호에 입력",
+     ["add 삼각대 전자기기 ²", "rent 우산 김민수 2026-11-02", "return ² 2026-11-03"],
+     ["오류: 수량은 1 이상의 숫자여야 합니다: ²",
+      "대여 완료: 1번 우산 (김민수) 반납 기한 2026-11-05", GUIDE_STANDARD,
+      "오류: 대여 번호는 숫자여야 합니다: ²"]),
+    # [피드백 반영] 내용이 깨진 자료 파일 (data/items_broken.json)
+    ("잘못된 입력", "손상된 자료 파일(JSON 형식 오류)",
+     ["list", "rent 우산 김민수 2026-11-02"],
+     ["오류: 자료 파일 형식이 잘못되었습니다: data.json",
+      "오류: 자료 파일 형식이 잘못되었습니다: data.json"]),
 ]
+
+# 기본 자료가 아닌 파일로 실행하는 검사
+DATA_FOR = {"손상된 자료 파일(JSON 형식 오류)": "items_broken.json"}
 
 NEW_CASES = [
     ("새 기능", "장기 품목 대여(14일)와 안내 문구",
@@ -105,6 +121,21 @@ NEW_CASES = [
      ["물품 추가: 제도기 (장기) 재고 2"]),
 ]
 
+# [피드백 반영] 새 기능 검사에서 v3가 저장한 JSON의 값도 확인한다: (설명, 꺼내는 함수, 예상값)
+NEW_SAVED = [
+    [("공학용계산기 재고", lambda d: d["items"]["공학용계산기"]["stock"], 0),
+     ("대여 기록 반납 기한", lambda d: d["loans"][0]["due_date"], "2026-11-16"),
+     ("대여 기록 반납 여부", lambda d: d["loans"][0]["returned"], False)],
+    [("공학용계산기 재고", lambda d: d["items"]["공학용계산기"]["stock"], 1),
+     ("반납일", lambda d: d["loans"][0]["return_date"], "2026-11-18"),
+     ("저장된 연체료", lambda d: d["loans"][0]["fee"], 0)],
+    [("공학용계산기 재고", lambda d: d["items"]["공학용계산기"]["stock"], 1),
+     ("반납일", lambda d: d["loans"][0]["return_date"], "2026-11-21"),
+     ("저장된 연체료", lambda d: d["loans"][0]["fee"], 600)],
+    [("제도기 품목", lambda d: d["items"]["제도기"], {"category": "장기", "stock": 2}),
+     ("대여 기록 수", lambda d: len(d["loans"]), 0)],
+]
+
 
 def run(version, data_name, commands, missing_file=False):
     """자료 파일의 복사본으로 프로그램을 실행하고 (출력 줄 목록, 저장된 JSON 글자)를 돌려준다."""
@@ -114,8 +145,9 @@ def run(version, data_name, commands, missing_file=False):
             data_path = MISSING
         else:
             shutil.copy(os.path.join(ROOT, "data", data_name), data_path)
+        # 프로그램은 복사본이 있는 폴더에서 실행하고, 오류 문장이 같도록 파일 이름만 넘긴다
         result = subprocess.run(
-            [sys.executable, "-X", "utf8", VERSIONS[version], data_path],
+            [sys.executable, "-X", "utf8", VERSIONS[version], os.path.basename(data_path)],
             input="\n".join(commands + ["quit"]) + "\n",
             capture_output=True, encoding="utf-8", cwd=folder)
         lines = result.stdout.splitlines()[1:]      # 첫 줄(명령 안내)은 뺀다
@@ -141,10 +173,11 @@ def main():
     write("=== 1) 기존 검사: 같은 입력을 v1 / v2 / v3 에 넣기 (자료: data/items.json) ===")
     for number, (kind, title, commands, expected) in enumerate(OLD_CASES, start=1):
         missing = title == "자료 파일 누락"
+        data_name = DATA_FOR.get(title, "items.json")
         outputs = {}
         saves = {}
         for version in VERSIONS:
-            outputs[version], saves[version] = run(version, "items.json", commands, missing)
+            outputs[version], saves[version] = run(version, data_name, commands, missing)
         same_saved = saves["v1"] == saves["v2"] == saves["v3"]
         ok = all(outputs[v] == expected for v in VERSIONS) and same_saved
         if not ok:
@@ -162,12 +195,23 @@ def main():
 
     write("")
     write("=== 2) 새 기능 검사: 장기 대여 규칙 (자료: data/items_v3.json) ===")
+    with open(os.path.join(ROOT, "data", "items_v3.json"), encoding="utf-8") as f:
+        original = f.read()
     for number, (kind, title, commands, expected) in enumerate(NEW_CASES, start=1):
-        v1_out, _ = run("v1", "items_v3.json", commands)
-        v2_out, _ = run("v2", "items_v3.json", commands)
-        v3_out, _ = run("v3", "items_v3.json", commands)
+        v1_out, v1_saved = run("v1", "items_v3.json", commands)
+        v2_out, v2_saved = run("v2", "items_v3.json", commands)
+        v3_out, v3_saved = run("v3", "items_v3.json", commands)
         old_error = "오류: 알 수 없는 분류입니다: 장기"
-        ok = v3_out == expected and v1_out[0] == old_error and v2_out[0] == old_error
+        saved = json.loads(v3_saved)
+        saved_ok = True
+        saved_lines = []
+        for label, get, want in NEW_SAVED[number - 1]:
+            got = get(saved)
+            saved_ok = saved_ok and got == want
+            saved_lines.append("%s 예상 %s / 실제 %s" % (label, want, got))
+        unchanged = v1_saved == original and v2_saved == original
+        ok = (v3_out == expected and v1_out[0] == old_error and v2_out[0] == old_error
+              and saved_ok and unchanged)
         if not ok:
             fail += 1
         write("")
@@ -175,8 +219,10 @@ def main():
         write_lines("입력: ", commands)
         write_lines("예상(v3): ", expected)
         write_lines("실제(v3): ", v3_out)
+        write_lines("저장값(v3): ", saved_lines)
         write("    변경 전 v1의 첫 출력: " + v1_out[0])
         write("    변경 전 v2의 첫 출력: " + v2_out[0])
+        write("    v1·v2 자료 파일이 바뀌지 않음 : " + str(unchanged))
 
     write("")
     total = len(OLD_CASES) + len(NEW_CASES)

@@ -15,6 +15,8 @@ def handle_command(line, data_path):
             data = json.load(f)
     except FileNotFoundError:
         return "오류: 자료 파일을 찾을 수 없습니다: " + data_path
+    except json.JSONDecodeError:
+        return "오류: 자료 파일 형식이 잘못되었습니다: " + data_path
 
     parts = line.split()
     if len(parts) == 0:
@@ -45,7 +47,8 @@ def handle_command(line, data_path):
             return "오류: 입력 형식이 잘못되었습니다"
         item_name = parts[1]
         category = parts[2]
-        if not parts[3].isdigit() or int(parts[3]) < 1:
+        # isdigit()은 '²' 같은 문자도 숫자로 보므로 0~9만 허용한다
+        if not (parts[3].isascii() and parts[3].isdigit()) or int(parts[3]) < 1:
             return "오류: 수량은 1 이상의 숫자여야 합니다: " + parts[3]
         count = int(parts[3])
         # 등록할 수 있는 분류인지 검사 (분류 조건 2번째)
@@ -109,7 +112,7 @@ def handle_command(line, data_path):
     elif parts[0] == "return":
         if len(parts) != 3:
             return "오류: 입력 형식이 잘못되었습니다"
-        if not parts[1].isdigit():
+        if not (parts[1].isascii() and parts[1].isdigit()):
             return "오류: 대여 번호는 숫자여야 합니다: " + parts[1]
         loan_id = int(parts[1])
         try:
