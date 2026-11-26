@@ -24,6 +24,8 @@ def handle_command(line, data_path):
         return "오류: 입력 형식이 잘못되었습니다"
 
     if parts[0] == "list":
+        if len(parts) != 1:
+            return "오류: 입력 형식이 잘못되었습니다"
         lines = ["[물품]"]
         for name in data["items"]:
             item = data["items"][name]

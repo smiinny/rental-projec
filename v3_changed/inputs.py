@@ -37,6 +37,8 @@ def parse_command(line):
     name = parts[0]
 
     if name == "list":
+        if len(parts) != 1:
+            raise ValueError("입력 형식이 잘못되었습니다")
         return "list", []
 
     if name == "add":
