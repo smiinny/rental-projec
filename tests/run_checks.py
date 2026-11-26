@@ -4,7 +4,7 @@
 결과는 화면에 출력되고 results/check_log.txt 에도 저장된다.
 
 검사 내용
- 1) 기존 검사 24개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지,
+ 1) 기존 검사 26개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지,
     저장이 일어나는 검사는 대표 저장값(재고·기한·연체료 등)이 예상값과 같은지,
     그리고 오류가 난 명령마다 그 명령 직전과 직후의 자료 파일이 같은지(오류 때 저장하지 않는지),
     자료 파일이 없을 때 실행 후에도 파일이 새로 생기지 않는지
@@ -185,6 +185,7 @@ OLD_CASES.append(
 
 # [10차 피드백 반영] UTF-8로 읽을 수 없는 자료 파일, 자료 파일 자리에 폴더가 있는 경우
 FOLDER_DATA = "(폴더)"
+SAVE_BLOCKED = "items.json + 임시 파일 자리에 폴더"   # 저장(임시 파일 쓰기)이 실패하는 상황
 OLD_CASES.append(
     ("잘못된 입력", "UTF-8이 아닌 자료 파일(EUC-KR로 저장된 한글)",
      ["list", "rent 우산 김민수 2026-11-02"],
@@ -194,8 +195,26 @@ OLD_CASES.append(
      ["list", "add 우산 일반 1"],
      ["오류: 자료 파일을 읽을 수 없습니다: data.json"] * 2))
 
+# [11차 피드백 반영] 저장 도중 실패해도 원본이 남는지, 자료 파일 안의 아주 긴 정수
+OLD_CASES.append(
+    ("잘못된 입력", "저장 실패(임시 파일 data.json.tmp 자리에 폴더): 원본 보존",
+     ["rent 우산 김민수 2026-11-02", "add 삼각대 전자기기 1", "list"],
+     ["오류: 자료 파일을 저장할 수 없습니다: data.json",
+      "오류: 자료 파일을 저장할 수 없습니다: data.json",
+      "[물품]",
+      "우산 (일반) 재고 2 | 3일 대여, 연체료 하루 500원(최대 3000원)",
+      "보조배터리 (전자기기) 재고 1 | 1일 대여, 연체료 하루 1000원",
+      "돗자리 (일반) 재고 0 | 3일 대여, 연체료 하루 500원(최대 3000원)",
+      "[대여 중]"]))
+OLD_CASES.append(
+    ("잘못된 입력", "자료 파일 안의 5000자리 정수(정수 변환 한도와 무관)",
+     ["list", "rent 우산 김민수 2026-11-02"],
+     ["오류: 자료 파일 형식이 잘못되었습니다: data.json"] * 2))
+
 # 기본 자료가 아닌 파일로 실행하는 검사
-DATA_FOR = {"UTF-8이 아닌 자료 파일(EUC-KR로 저장된 한글)": "items_not_utf8.json",
+DATA_FOR = {"저장 실패(임시 파일 data.json.tmp 자리에 폴더): 원본 보존": SAVE_BLOCKED,
+            "자료 파일 안의 5000자리 정수(정수 변환 한도와 무관)": "items_huge_number.json",
+            "UTF-8이 아닌 자료 파일(EUC-KR로 저장된 한글)": "items_not_utf8.json",
             "자료 파일 자리에 폴더가 있음(열 수 없는 파일)": FOLDER_DATA,
             "구조가 잘못된 자료 파일 3: 대여 기록의 item이 목록": "items_bad_loan_item.json",
             "구조가 잘못된 자료 파일 4: 저장된 대여일이 없는 날짜(2026-02-30)": "items_bad_dates.json",
@@ -245,6 +264,9 @@ def run(version, data_name, commands, missing_file=False):
         else:
             if data_name == FOLDER_DATA:
                 os.mkdir(data_path)     # 자료 파일 자리에 폴더가 있는 경우
+            elif data_name == SAVE_BLOCKED:
+                shutil.copy(os.path.join(ROOT, "data", "items.json"), data_path)
+                os.mkdir(data_path + ".tmp")    # 임시 파일을 만들 수 없어 저장이 실패한다
             else:
                 shutil.copy(os.path.join(ROOT, "data", data_name), data_path)
         # 프로그램은 복사본이 있는 폴더에서 실행하고, 오류 문장이 같도록 파일 이름만 넘긴다
@@ -271,7 +293,8 @@ def check_error_keeps_file(version, data_name, commands, missing_file=False):
     if missing_file or data_name == FOLDER_DATA:
         before_out, before_saved = [], None
     else:
-        with open(os.path.join(ROOT, "data", data_name), "rb") as f:
+        source = "items.json" if data_name == SAVE_BLOCKED else data_name
+        with open(os.path.join(ROOT, "data", source), "rb") as f:
             before_out, before_saved = [], f.read()
     errors = []
     changed = []

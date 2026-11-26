@@ -4,11 +4,39 @@
 실행: python v1_before/rental.py data/items.json
 """
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta
 
 MAX_DIGITS = 9    # 수량·대여 번호는 0~9로 된 최대 9자리 숫자만 받는다 (Python 버전과 무관하게 같은 기준)
+
+
+def parse_json_int(text):
+    """자료 파일(JSON) 안의 정수를 바꾼다. 15자리를 넘으면 ValueError.
+
+    Python 버전에 따라 아주 긴 정수를 받기도 하고 거부하기도 하므로, 자릿수를 직접 제한해
+    어느 환경에서나 "자료 파일 형식이 잘못되었습니다"라는 같은 결과를 낸다.
+    """
+    if len(text.lstrip("-")) > 15:
+        raise ValueError("정수가 너무 깁니다")
+    return int(text)
+
+
+def write_json_safely(data_path, data):
+    """임시 파일(자료 파일 이름 + .tmp)에 끝까지 쓴 뒤 원본과 바꾼다.
+
+    쓰는 도중 실패해도 원본 자료 파일은 그대로 남는다. 실패하면 ValueError.
+    """
+    temp_path = data_path + ".tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(temp_path, data_path)     # 다 쓴 임시 파일로 한 번에 교체
+    except OSError:
+        if os.path.isfile(temp_path):
+            os.remove(temp_path)             # 쓰다 만 임시 파일만 지운다
+        raise ValueError("자료 파일을 저장할 수 없습니다: " + data_path)
 
 
 def is_valid_data(data):
@@ -69,11 +97,11 @@ def handle_command(line, data_path):
     # --- 저장된 자료 읽기 ---
     try:
         with open(data_path, encoding="utf-8") as f:
-            data = json.load(f)
+            data = json.load(f, parse_int=parse_json_int)
     except FileNotFoundError:
         return "오류: 자료 파일을 찾을 수 없습니다: " + data_path
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        # JSON 문법 오류, UTF-8로 읽을 수 없는 글자 모두 형식 오류로 본다
+    except ValueError:
+        # JSON 문법 오류, UTF-8로 읽을 수 없는 글자, 너무 긴 정수 모두 형식 오류로 본다
         return "오류: 자료 파일 형식이 잘못되었습니다: " + data_path
     except OSError:
         # 폴더이거나 읽기 권한이 없는 등 파일을 열 수 없는 경우
@@ -131,8 +159,10 @@ def handle_command(line, data_path):
         else:
             data["items"][item_name] = {"category": category, "stock": count}
             message = "물품 추가: " + item_name + " (" + category + ") 재고 " + str(count)
-        with open(data_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            write_json_safely(data_path, data)
+        except ValueError as error:
+            return "오류: " + str(error)
         return message
 
     elif parts[0] == "rent":
@@ -178,8 +208,10 @@ def handle_command(line, data_path):
             "fee": 0,
         })
         item["stock"] = item["stock"] - 1
-        with open(data_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            write_json_safely(data_path, data)
+        except ValueError as error:
+            return "오류: " + str(error)
         return ("대여 완료: " + str(loan_id) + "번 " + item_name + " (" + borrower
                 + ") 반납 기한 " + str(due_date) + "\n안내: " + guide)
 
@@ -224,8 +256,10 @@ def handle_command(line, data_path):
         loan["return_date"] = str(return_date)
         loan["fee"] = fee
         data["items"][loan["item"]]["stock"] += 1
-        with open(data_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            write_json_safely(data_path, data)
+        except ValueError as error:
+            return "오류: " + str(error)
         return ("반납 완료: " + str(loan_id) + "번 " + loan["item"] + " 연체 "
                 + str(late_days) + "일 연체료 " + str(fee) + "원")
 

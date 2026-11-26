@@ -67,7 +67,9 @@ def make_data(rng):
     if k < .04:
         return json.dumps(data, ensure_ascii=False).encode("euc-kr")       # UTF-8이 아닌 한글
     if k < .08:
-        return rng.choice([b"", b"{", b"[]", b"null", b"\xff\xfe{}", b'{"items": {}, "loans": []'])
+        return rng.choice([b"", b"{", b"[]", b"null", b"\xff\xfe{}", b'{"items": {}, "loans": []',
+                           b'{"items": {"\xec\x9a\xb0\xec\x82\xb0": {"category": "\xec\x9d\xbc\xeb\xb0\x98", "stock": '
+                           + b"1" * 5000 + b'}}, "loans": []}'])
     if k < .5:
         return json.dumps(data, ensure_ascii=False).encode("utf-8")
     loan = {"id": 1, "item": "우산", "borrower": "a", "rent_date": "2026-11-02", "due_date": "2026-11-05",
