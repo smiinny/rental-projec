@@ -4,7 +4,9 @@
 결과는 화면에 출력되고 results/check_log.txt 에도 저장된다.
 
 검사 내용
- 1) 기존 검사 14개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지
+ 1) 기존 검사 15개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지,
+    그리고 오류가 난 명령마다 그 명령 직전과 직후의 자료 파일이 같은지(오류 때 저장하지 않는지),
+    자료 파일이 없을 때 실행 후에도 파일이 새로 생기지 않는지
  2) 새 기능 검사 4개: v3에서 장기 대여 규칙이 동작하고 저장값이 예상과 같은지,
     v1·v2에서는 오류가 나고 자료 파일이 바뀌지 않는지
 """
@@ -101,6 +103,14 @@ OLD_CASES = [
       "오류: 자료 파일 형식이 잘못되었습니다: data.json"]),
 ]
 
+# [2차 피드백 반영] strptime이 받아 주던 한 자리 월·일 날짜
+OLD_CASES.append(
+    ("잘못된 입력", "한 자리 월·일 날짜(2026-1-5, 2026-11-5)",
+     ["rent 우산 김민수 2026-1-5", "rent 우산 김민수 2026-11-02", "return 1 2026-11-5"],
+     ["오류: 날짜 형식이 잘못되었습니다(YYYY-MM-DD): 2026-1-5",
+      "대여 완료: 1번 우산 (김민수) 반납 기한 2026-11-05", GUIDE_STANDARD,
+      "오류: 날짜 형식이 잘못되었습니다(YYYY-MM-DD): 2026-11-5"]))
+
 # 기본 자료가 아닌 파일로 실행하는 검사
 DATA_FOR = {"손상된 자료 파일(JSON 형식 오류)": "items_broken.json"}
 
@@ -151,11 +161,37 @@ def run(version, data_name, commands, missing_file=False):
             input="\n".join(commands + ["quit"]) + "\n",
             capture_output=True, encoding="utf-8", cwd=folder)
         lines = result.stdout.splitlines()[1:]      # 첫 줄(명령 안내)은 뺀다
-        saved = ""
-        if not missing_file:
-            with open(data_path, encoding="utf-8") as f:
+        # 실행이 끝난 뒤의 자료 파일 내용. 파일이 없으면 None (누락 파일 검사에서 쓰임)
+        saved_path = os.path.join(folder, os.path.basename(data_path))
+        saved = None
+        if os.path.exists(saved_path):
+            with open(saved_path, encoding="utf-8") as f:
                 saved = f.read()
         return lines, saved
+
+
+def check_error_keeps_file(version, data_name, commands, missing_file=False):
+    """오류가 난 명령마다 그 명령 직전과 직후의 자료 파일 내용이 같은지 확인한다.
+
+    명령을 앞에서부터 1개, 2개, ... 넣어 실행하고, 새로 나온 첫 출력이 "오류:"이면
+    바로 앞 단계의 파일과 비교한다. 돌려주는 값: (확인한 오류 명령 수, 파일이 바뀐 명령 목록)
+    """
+    if missing_file:
+        before_out, before_saved = [], None
+    else:
+        with open(os.path.join(ROOT, "data", data_name), encoding="utf-8") as f:
+            before_out, before_saved = [], f.read()
+    checked = 0
+    changed = []
+    for k in range(1, len(commands) + 1):
+        out, saved = run(version, data_name, commands[:k], missing_file)
+        new_lines = out[len(before_out):]
+        if new_lines and new_lines[0].startswith("오류:"):
+            checked += 1
+            if saved != before_saved:
+                changed.append(commands[k - 1])
+        before_out, before_saved = out, saved
+    return checked, changed
 
 
 def main():
@@ -179,7 +215,11 @@ def main():
         for version in VERSIONS:
             outputs[version], saves[version] = run(version, data_name, commands, missing)
         same_saved = saves["v1"] == saves["v2"] == saves["v3"]
-        ok = all(outputs[v] == expected for v in VERSIONS) and same_saved
+        keep = {v: check_error_keeps_file(v, data_name, commands, missing) for v in VERSIONS}
+        keep_ok = all(not changed for _, changed in keep.values())
+        ok = all(outputs[v] == expected for v in VERSIONS) and same_saved and keep_ok
+        if missing:
+            ok = ok and all(saves[v] is None for v in VERSIONS)
         if not ok:
             fail += 1
         write("")
@@ -191,7 +231,14 @@ def main():
                 write("    %s  : 예상과 같은 %d줄 출력" % (version, len(expected)))
             else:
                 write_lines(version + "  : ", outputs[version])
-        write("    저장된 JSON이 v1 = v2 = v3 : " + str(same_saved))
+        if missing:
+            write("    실행 후에도 자료 파일이 생기지 않음(v1·v2·v3) : "
+                  + str(all(saves[v] is None for v in VERSIONS)))
+        else:
+            write("    저장된 JSON이 v1 = v2 = v3 : " + str(same_saved))
+        checked = keep["v1"][0]
+        if checked:
+            write("    오류 명령 %d개의 직전·직후 자료 파일이 같음(v1·v2·v3) : %s" % (checked, keep_ok))
 
     write("")
     write("=== 2) 새 기능 검사: 장기 대여 규칙 (자료: data/items_v3.json) ===")

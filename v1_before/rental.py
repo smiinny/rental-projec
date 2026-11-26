@@ -4,6 +4,7 @@
 실행: python v1_before/rental.py data/items.json
 """
 import json
+import re
 import sys
 from datetime import datetime, timedelta
 
@@ -74,6 +75,9 @@ def handle_command(line, data_path):
         item_name = parts[1]
         borrower = parts[2]
         try:
+            # strptime은 '2026-1-5'도 받으므로 YYYY-MM-DD 모양인지 먼저 확인한다
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", parts[3]):
+                raise ValueError
             rent_date = datetime.strptime(parts[3], "%Y-%m-%d").date()
         except ValueError:
             return "오류: 날짜 형식이 잘못되었습니다(YYYY-MM-DD): " + parts[3]
@@ -116,6 +120,8 @@ def handle_command(line, data_path):
             return "오류: 대여 번호는 숫자여야 합니다: " + parts[1]
         loan_id = int(parts[1])
         try:
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", parts[2]):
+                raise ValueError
             return_date = datetime.strptime(parts[2], "%Y-%m-%d").date()
         except ValueError:
             return "오류: 날짜 형식이 잘못되었습니다(YYYY-MM-DD): " + parts[2]

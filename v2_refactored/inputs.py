@@ -1,10 +1,16 @@
 """입력 담당: 사용자가 친 글자를 검사해서 쓸 수 있는 값으로 바꾼다."""
+import re
 from datetime import datetime
 
 
 def parse_date(text):
-    """'2026-11-16' 같은 글자를 날짜로 바꾼다. 형식이 틀리면 ValueError."""
+    """'2026-11-16' 같은 글자를 날짜로 바꾼다. 형식이 틀리면 ValueError.
+
+    strptime은 '2026-1-5'처럼 한 자리 월·일도 받으므로 YYYY-MM-DD 모양인지 먼저 확인한다.
+    """
     try:
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
+            raise ValueError
         return datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError:
         raise ValueError("날짜 형식이 잘못되었습니다(YYYY-MM-DD): " + text)

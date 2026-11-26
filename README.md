@@ -100,7 +100,9 @@ results/
   web_screen.png        웹 화면 캡처
 ```
 
-v2와 v3의 차이는 `diff -r v2_refactored v3_changed`(Windows: `fc`)로 직접 확인할 수 있습니다.
+v2와 v3의 차이는 macOS·Linux에서 `diff -r v2_refactored v3_changed`로, Windows에서는 git이 설치되어 있다면
+`git diff --no-index v2_refactored v3_changed`로 폴더 전체를 비교해 확인할 수 있습니다.
+(Windows의 `fc`는 폴더가 아니라 파일 두 개만 비교하므로 `fc v2_refactored\rules.py v3_changed\rules.py`처럼 파일별로 써야 합니다.)
 
 ## 6. AI 사용
 
