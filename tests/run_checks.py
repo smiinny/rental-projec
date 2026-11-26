@@ -4,7 +4,7 @@
 결과는 화면에 출력되고 results/check_log.txt 에도 저장된다.
 
 검사 내용
- 1) 기존 검사 22개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지,
+ 1) 기존 검사 24개: 예상 결과와 세 버전의 실제 출력이 같은지, 저장된 JSON이 서로 같은지,
     저장이 일어나는 검사는 대표 저장값(재고·기한·연체료 등)이 예상값과 같은지,
     그리고 오류가 난 명령마다 그 명령 직전과 직후의 자료 파일이 같은지(오류 때 저장하지 않는지),
     자료 파일이 없을 때 실행 후에도 파일이 새로 생기지 않는지
@@ -183,8 +183,21 @@ OLD_CASES.append(
      ["list", "return 1 2026-11-03", "add 우산 일반 1"],
      ["오류: 자료 파일 구조가 잘못되었습니다: data.json"] * 3))
 
+# [10차 피드백 반영] UTF-8로 읽을 수 없는 자료 파일, 자료 파일 자리에 폴더가 있는 경우
+FOLDER_DATA = "(폴더)"
+OLD_CASES.append(
+    ("잘못된 입력", "UTF-8이 아닌 자료 파일(EUC-KR로 저장된 한글)",
+     ["list", "rent 우산 김민수 2026-11-02"],
+     ["오류: 자료 파일 형식이 잘못되었습니다: data.json"] * 2))
+OLD_CASES.append(
+    ("잘못된 입력", "자료 파일 자리에 폴더가 있음(열 수 없는 파일)",
+     ["list", "add 우산 일반 1"],
+     ["오류: 자료 파일을 읽을 수 없습니다: data.json"] * 2))
+
 # 기본 자료가 아닌 파일로 실행하는 검사
-DATA_FOR = {"구조가 잘못된 자료 파일 3: 대여 기록의 item이 목록": "items_bad_loan_item.json",
+DATA_FOR = {"UTF-8이 아닌 자료 파일(EUC-KR로 저장된 한글)": "items_not_utf8.json",
+            "자료 파일 자리에 폴더가 있음(열 수 없는 파일)": FOLDER_DATA,
+            "구조가 잘못된 자료 파일 3: 대여 기록의 item이 목록": "items_bad_loan_item.json",
             "구조가 잘못된 자료 파일 4: 저장된 대여일이 없는 날짜(2026-02-30)": "items_bad_dates.json",
             "손상된 자료 파일(JSON 형식 오류)": "items_broken.json",
             "구조가 잘못된 자료 파일 1: 빈 객체 {}": "items_empty_object.json",
@@ -230,7 +243,10 @@ def run(version, data_name, commands, missing_file=False):
         if missing_file:
             data_path = MISSING
         else:
-            shutil.copy(os.path.join(ROOT, "data", data_name), data_path)
+            if data_name == FOLDER_DATA:
+                os.mkdir(data_path)     # 자료 파일 자리에 폴더가 있는 경우
+            else:
+                shutil.copy(os.path.join(ROOT, "data", data_name), data_path)
         # 프로그램은 복사본이 있는 폴더에서 실행하고, 오류 문장이 같도록 파일 이름만 넘긴다
         result = subprocess.run(
             [sys.executable, "-X", "utf8", VERSIONS[version], os.path.basename(data_path)],
@@ -239,9 +255,9 @@ def run(version, data_name, commands, missing_file=False):
         lines = result.stdout.splitlines()[1:]      # 첫 줄(명령 안내)은 뺀다
         # 실행이 끝난 뒤의 자료 파일 내용. 파일이 없으면 None (누락 파일 검사에서 쓰임)
         saved_path = os.path.join(folder, os.path.basename(data_path))
-        saved = None
-        if os.path.exists(saved_path):
-            with open(saved_path, encoding="utf-8") as f:
+        saved = None                    # 파일이 없거나 폴더면 None
+        if os.path.isfile(saved_path):
+            with open(saved_path, "rb") as f:   # UTF-8이 아닌 파일도 비교할 수 있게 바이트로 읽는다
                 saved = f.read()
         return lines, saved
 
@@ -250,24 +266,24 @@ def check_error_keeps_file(version, data_name, commands, missing_file=False):
     """오류가 난 명령마다 그 명령 직전과 직후의 자료 파일 내용이 같은지 확인한다.
 
     명령을 앞에서부터 1개, 2개, ... 넣어 실행하고, 새로 나온 첫 출력이 "오류:"이면
-    바로 앞 단계의 파일과 비교한다. 돌려주는 값: (확인한 오류 명령 수, 파일이 바뀐 명령 목록)
+    바로 앞 단계의 파일과 비교한다. 돌려주는 값: (오류가 난 명령 목록, 파일이 바뀐 명령 목록)
     """
-    if missing_file:
+    if missing_file or data_name == FOLDER_DATA:
         before_out, before_saved = [], None
     else:
-        with open(os.path.join(ROOT, "data", data_name), encoding="utf-8") as f:
+        with open(os.path.join(ROOT, "data", data_name), "rb") as f:
             before_out, before_saved = [], f.read()
-    checked = 0
+    errors = []
     changed = []
     for k in range(1, len(commands) + 1):
         out, saved = run(version, data_name, commands[:k], missing_file)
         new_lines = out[len(before_out):]
         if new_lines and new_lines[0].startswith("오류:"):
-            checked += 1
+            errors.append(commands[k - 1])
             if saved != before_saved:
                 changed.append(commands[k - 1])
         before_out, before_saved = out, saved
-    return checked, changed
+    return errors, changed
 
 
 def main():
@@ -327,13 +343,15 @@ def main():
         if value_lines:
             write_lines("저장값 대조: ", value_lines)
             write("    대표 저장값이 예상과 같음(v1·v2·v3) : " + str(values_ok))
-        checked = keep["v1"][0]
-        if checked:
-            write("    오류 명령 %d개의 직전·직후 자료 파일이 같음(v1·v2·v3) : %s" % (checked, keep_ok))
+        errors = keep["v1"][0]
+        if errors:
+            short = [c if len(c) <= 40 else c[:25] + "...(총 %d자)" % len(c) for c in errors]
+            write("    오류가 난 명령 %d개: %s" % (len(errors), " / ".join(short)))
+            write("    이 %d개 명령의 직전·직후 자료 파일이 같음(v1·v2·v3) : %s" % (len(errors), keep_ok))
 
     write("")
     write("=== 2) 새 기능 검사: 장기 대여 규칙 (자료: data/items_v3.json) ===")
-    with open(os.path.join(ROOT, "data", "items_v3.json"), encoding="utf-8") as f:
+    with open(os.path.join(ROOT, "data", "items_v3.json"), "rb") as f:
         original = f.read()
     for number, (kind, title, commands, expected) in enumerate(NEW_CASES, start=1):
         v1_out, v1_saved = run("v1", "items_v3.json", commands)

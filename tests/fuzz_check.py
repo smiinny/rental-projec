@@ -57,10 +57,19 @@ def make_command(rng):
 
 
 def make_data(rng):
-    """절반은 정상 자료, 절반은 대여 기록 하나를 넣고 그중 한 값을 망가뜨린 자료를 만든다."""
+    """자료 파일에 쓸 바이트를 만든다.
+
+    대략 절반은 정상 자료, 나머지는 대여 기록 하나를 넣고 그중 한 값을 망가뜨린 자료이고,
+    가끔은 UTF-8이 아닌 글자나 깨진 JSON 문법을 넣는다.
+    """
     data = copy.deepcopy(BASE)
-    if rng.random() < .5:
-        return data
+    k = rng.random()
+    if k < .04:
+        return json.dumps(data, ensure_ascii=False).encode("euc-kr")       # UTF-8이 아닌 한글
+    if k < .08:
+        return rng.choice([b"", b"{", b"[]", b"null", b"\xff\xfe{}", b'{"items": {}, "loans": []'])
+    if k < .5:
+        return json.dumps(data, ensure_ascii=False).encode("utf-8")
     loan = {"id": 1, "item": "우산", "borrower": "a", "rent_date": "2026-11-02", "due_date": "2026-11-05",
             "returned": False, "return_date": None, "fee": 0}
     data["loans"].append(loan)
@@ -74,18 +83,18 @@ def make_data(rng):
         data["items"]["우산"]["stock"] = bad
     elif field != "none":
         loan[field] = bad
-    return data
+    return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
 def run_version(path, data, commands):
     """자료 복사본으로 한 버전을 실행하고 (화면 출력, 실행 후 자료 파일 글자, 오류 출력)을 돌려준다."""
     with tempfile.TemporaryDirectory() as tmp:
-        with open(f"{tmp}/data.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
+        with open(f"{tmp}/data.json", "wb") as f:
+            f.write(data)
         result = subprocess.run([sys.executable, "-X", "utf8", path, "data.json"],
                                 input="\n".join(commands + ["quit"]) + "\n",
                                 capture_output=True, encoding="utf-8", cwd=tmp)
-        with open(f"{tmp}/data.json", encoding="utf-8") as f:
+        with open(f"{tmp}/data.json", "rb") as f:
             saved = f.read()
     return result.stdout, saved, result.stderr
 

@@ -61,15 +61,19 @@ def is_valid_data(data):
 def load_data(data_path):
     """자료 파일을 읽어 딕셔너리로 돌려준다.
 
-    파일이 없거나, JSON 문법이 깨졌거나, 구조(items·loans와 자료형)가 맞지 않으면 ValueError.
+    파일이 없거나, 열 수 없거나, UTF-8·JSON 문법이 깨졌거나, 구조(items·loans와 자료형)가 맞지 않으면 ValueError.
     """
     try:
         with open(data_path, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         raise ValueError("자료 파일을 찾을 수 없습니다: " + data_path)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # JSON 문법 오류, UTF-8로 읽을 수 없는 글자 모두 형식 오류로 본다
         raise ValueError("자료 파일 형식이 잘못되었습니다: " + data_path)
+    except OSError:
+        # 폴더이거나 읽기 권한이 없는 등 파일을 열 수 없는 경우
+        raise ValueError("자료 파일을 읽을 수 없습니다: " + data_path)
     if not is_valid_data(data):
         raise ValueError("자료 파일 구조가 잘못되었습니다: " + data_path)
     return data

@@ -72,8 +72,12 @@ def handle_command(line, data_path):
             data = json.load(f)
     except FileNotFoundError:
         return "오류: 자료 파일을 찾을 수 없습니다: " + data_path
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # JSON 문법 오류, UTF-8로 읽을 수 없는 글자 모두 형식 오류로 본다
         return "오류: 자료 파일 형식이 잘못되었습니다: " + data_path
+    except OSError:
+        # 폴더이거나 읽기 권한이 없는 등 파일을 열 수 없는 경우
+        return "오류: 자료 파일을 읽을 수 없습니다: " + data_path
     if not is_valid_data(data):
         return "오류: 자료 파일 구조가 잘못되었습니다: " + data_path
 
