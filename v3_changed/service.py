@@ -42,7 +42,11 @@ def rent(data, item_name, borrower, rent_date):
         raise ValueError("재고가 없습니다: " + item_name)
 
     rule = get_rule(item["category"])              # 규칙 선택 (Strategy)
-    due_date = rule.due_date(rent_date)
+    try:
+        due_date = rule.due_date(rent_date)
+    except OverflowError:
+        # 9999-12-31처럼 기한이 날짜 범위를 넘으면 사용자용 오류로 바꾼다
+        raise ValueError("반납 기한이 날짜 범위를 넘습니다: " + str(rent_date))
 
     loan_id = len(data["loans"]) + 1
     data["loans"].append({

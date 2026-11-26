@@ -95,7 +95,11 @@ def handle_command(line, data_path):
             guide = "1일 대여, 연체료 하루 1000원"
         else:
             return "오류: 알 수 없는 분류입니다: " + item["category"]
-        due_date = rent_date + timedelta(days=days)
+        try:
+            due_date = rent_date + timedelta(days=days)
+        except OverflowError:
+            # 9999-12-31처럼 기한이 날짜 범위를 넘으면 프로그램이 멈추지 않고 오류 문장을 낸다
+            return "오류: 반납 기한이 날짜 범위를 넘습니다: " + str(rent_date)
         loan_id = len(data["loans"]) + 1
         data["loans"].append({
             "id": loan_id,
